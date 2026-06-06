@@ -207,6 +207,36 @@ config = RavenConfig(
 model = AutoModelForCausalLM.from_config(config).cuda()
 ```
 
+### As a tracking module
+
+```python
+import torch
+from raven.models.tracking import TrackingRavenConfig, TrackingRavenModel
+
+config = TrackingRavenConfig(
+    input_dim=256,
+    hidden_size=256,
+    appearance_slots=8,
+    motion_slots=4,
+    position_slots=4,
+    occlusion_slots=4,
+    topk=2,
+)
+model = TrackingRavenModel(config)
+
+frame_features = torch.randn(2, 4, 256)  # (batch_size=2, num_objects=4, feature_dim=256)
+confidence = torch.rand(2, 4, 1)
+bbox = torch.rand(2, 4, 4)  # example bbox data: normalized xyxy coordinates in [0, 1]
+outputs, state = model(frame_features, confidence, bbox)
+
+# single-object mode
+single_config = TrackingRavenConfig(input_dim=256, hidden_size=256, multi_object=False)
+single_model = TrackingRavenModel(single_config)
+single_outputs, single_state = single_model(
+    torch.randn(2, 1, 256), torch.rand(2, 1, 1), torch.rand(2, 1, 4)
+)
+```
+
 ---
 
 ## Training
@@ -276,8 +306,3 @@ This repo builds on [fla-org/flash-linear-attention] and depends on it for hardw
 }
 
 ```
-
-
-
-
-
