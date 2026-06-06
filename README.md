@@ -224,9 +224,9 @@ config = TrackingRavenConfig(
 )
 model = TrackingRavenModel(config)
 
-frame_features = torch.randn(2, 4, 256)  # batch, objects, features
+frame_features = torch.randn(2, 4, 256)  # (batch_size=2, num_objects=4, feature_dim=256)
 confidence = torch.rand(2, 4, 1)
-bbox = torch.rand(2, 4, 4)
+bbox = torch.rand(2, 4, 4)  # example bbox data: normalized xyxy coordinates in [0, 1]
 outputs, state = model(frame_features, confidence, bbox)
 
 # single-object mode
@@ -306,5 +306,3 @@ This repo builds on [fla-org/flash-linear-attention] and depends on it for hardw
 }
 
 ```
-
-

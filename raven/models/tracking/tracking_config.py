@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from transformers.configuration_utils import PretrainedConfig
 
@@ -19,11 +19,12 @@ class TrackingRavenConfig(PretrainedConfig):
         topk: int = 2,
         short_forgetting: float = 0.15,
         long_forgetting: float = 0.03,
+        short_read_weight: float = 0.6,
         trajectory_smoothing: float = 0.85,
         reid_dim: int = 128,
         multi_object: bool = True,
         use_raven_aggregation: bool = True,
-        raven_kwargs: Optional[Dict] = None,
+        raven_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,
     ) -> None:
         self.input_dim = input_dim
@@ -35,6 +36,7 @@ class TrackingRavenConfig(PretrainedConfig):
         self.topk = topk
         self.short_forgetting = short_forgetting
         self.long_forgetting = long_forgetting
+        self.short_read_weight = short_read_weight
         self.trajectory_smoothing = trajectory_smoothing
         self.reid_dim = reid_dim
         self.multi_object = multi_object

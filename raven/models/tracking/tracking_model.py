@@ -33,6 +33,7 @@ class TrackingRavenModel(nn.Module):
             topk=config.topk,
             short_forgetting=config.short_forgetting,
             long_forgetting=config.long_forgetting,
+            short_read_weight=config.short_read_weight,
             trajectory_smoothing=config.trajectory_smoothing,
             reid_dim=config.reid_dim,
             use_raven_aggregation=config.use_raven_aggregation,

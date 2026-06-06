@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -38,8 +38,9 @@ class TrackingRaven(nn.Module):
         long_forgetting: float = 0.03,
         trajectory_smoothing: float = 0.85,
         reid_dim: int = 128,
+        short_read_weight: float = 0.6,
         use_raven_aggregation: bool = True,
-        raven_kwargs: Optional[Dict] = None,
+        raven_kwargs: Optional[Dict[str, Any]] = None,
     ) -> None:
         super().__init__()
         self.hidden_size = hidden_size
@@ -51,6 +52,8 @@ class TrackingRaven(nn.Module):
         self.short_forgetting = short_forgetting
         self.long_forgetting = long_forgetting
         self.trajectory_smoothing = trajectory_smoothing
+        self.short_read_weight = short_read_weight
+        self.long_read_weight = 1.0 - short_read_weight
 
         routing_input_dim = hidden_size * 2 + 6  # current + historical + confidence/bbox/occlusion
         self.appearance_router = nn.Linear(routing_input_dim, appearance_slots)
@@ -68,7 +71,8 @@ class TrackingRaven(nn.Module):
             kwargs = raven_kwargs or {}
             self.aggregator = RavenAttention(hidden_size=hidden_size, topk=max(topk, 1), **kwargs)
 
-        self.fusion = nn.Linear(hidden_size * 6 + 9, hidden_size)
+        fusion_aux_dim = 4 + 4 + 1  # prev_bbox + position_offset + occlusion flag
+        self.fusion = nn.Linear(hidden_size * 6 + fusion_aux_dim, hidden_size)
         self.bbox_head = nn.Linear(hidden_size, 4)
         self.existence_head = nn.Linear(hidden_size, 1)
         self.reid_head = nn.Linear(hidden_size, reid_dim)
@@ -144,9 +148,8 @@ class TrackingRaven(nn.Module):
         long_updated = long_memory * long_decay + gated_weights * short_updated.detach()
         return short_updated, long_updated
 
-    @staticmethod
-    def _read_channel(short_memory: torch.Tensor, long_memory: torch.Tensor) -> torch.Tensor:
-        return 0.6 * short_memory.mean(dim=2) + 0.4 * long_memory.mean(dim=2)
+    def _read_channel(self, short_memory: torch.Tensor, long_memory: torch.Tensor) -> torch.Tensor:
+        return self.short_read_weight * short_memory.mean(dim=2) + self.long_read_weight * long_memory.mean(dim=2)
 
     def forward(
         self,
@@ -166,6 +169,7 @@ class TrackingRaven(nn.Module):
             occluded = state.prev_occlusion
         elif occluded.ndim == 2:
             occluded = occluded.unsqueeze(-1)
+        occluded = occluded.clamp(0.0, 1.0)
 
         position_offset = bbox - state.prev_position
         historical_appearance = self._read_channel(state.appearance_short, state.appearance_long)
@@ -233,8 +237,9 @@ class TrackingRaven(nn.Module):
         raw_bbox = self.bbox_head(fused)
         smoothed_bbox = self.trajectory_smoothing * state.prev_bbox + (1.0 - self.trajectory_smoothing) * raw_bbox
         existence = torch.sigmoid(self.existence_head(fused))
-        stable_embedding = F.normalize(self.reid_head(appearance_read + occlusion_read), dim=-1)
         occlusion_prob = torch.sigmoid(self.occlusion_head(occlusion_read))
+        reid_source = appearance_read * (1.0 - occlusion_prob)
+        reid_embedding = F.normalize(self.reid_head(reid_source), dim=-1)
 
         next_state = TrackingMemoryState(
             appearance_short=appearance_short,
@@ -251,10 +256,9 @@ class TrackingRaven(nn.Module):
         )
 
         outputs = {
-            "bbox": smoothed_bbox,
-            "bbox_raw": raw_bbox,
+            "bbox": raw_bbox,
             "existence_prob": existence,
-            "reid_embedding": stable_embedding,
+            "reid_embedding": reid_embedding,
             "trajectory": smoothed_bbox,
             "occlusion_prob": occlusion_prob,
             "aggregated_state": fused,
