@@ -259,6 +259,7 @@ class TrackingRaven(nn.Module):
             "occlusion_prob": occlusion_prob,
             "aggregated_state": fused,
             "confidence_gate": confidence_gate,
-            "occlusion_gate": appearance_gate,
+            "appearance_gate": appearance_gate,
+            "occlusion_gate": occlusion_gate,
         }
         return outputs, next_state
